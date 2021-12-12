@@ -38,12 +38,12 @@ public:
   void run()
   {
     ntk.foreach_node( [&]( node n ){
-      std::cout << " ----- "<< n << " -----" << std::endl;
-      std::cout << "LEVE : " << ntk.level(n) << std::endl;
-      ntk.foreach_fanin(n, [this]( auto const& f) { std::cout << ntk.get_node(f) << " signal :"<< ntk.is_complemented(f)<<std::endl;
+      std::cout << " ------ Level: " << ntk.level(n) << "         -------  " << "Node: "<< n << std::endl;
+      ntk.foreach_fanin(n, [this]( auto const& f) { std::cout << "        " << ntk.get_node(f) << " ; is signal compl:"<< ntk.is_complemented(f)<<std::endl;
                                                                           });
     });
     ntk.foreach_po([&](signal const &f){ std::cout<< "po signal : "<< ntk.get_node(f) << "  " << ntk.is_complemented(f)<<std::endl;});
+    ntk.foreach_pi([&](node const &f){ std::cout<< "pi node after update: "<< f <<  std::endl;});
     std::cout << " ----- ===================== " << std::endl;
     bool cont{true}; /* continue trying */
     while ( cont )
@@ -58,12 +58,12 @@ public:
       });
     }
     ntk.foreach_node( [&]( node n ){
-      std::cout << " ----- "<< n << " -----" << std::endl;
-      ntk.foreach_fanin(n, [this]( auto const& f) { std::cout << ntk.get_node(f) << " signal :"<< ntk.is_complemented(f)<< std::endl;
+      std::cout << " ------ Level: " << ntk.level(n) << "         -------  " << "Node: "<< n << std::endl;
+      ntk.foreach_fanin(n, [this]( auto const& f) { std::cout << "        " << ntk.get_node(f) << " ; is signal compl :"<< ntk.is_complemented(f)<< std::endl;
                                                                           });
     });
     ntk.foreach_po([&](signal const &f){ std::cout<< "po signal after update: "<< ntk.get_node(f) << "  " <<ntk.is_complemented(f)<<std::endl;});
-    
+    ntk.foreach_pi([&](node const &f){ std::cout<< "pi node after update: "<< f << std::endl;});
 
   }
 
@@ -79,77 +79,46 @@ private:
 
     return false;
   }
-  std::array<Node_sig, 2> ordered_children( node const& n ) const
+    bool out_sig_comp(node n)
   {
-    std::array<Node_sig, 2> children;
-    ntk.foreach_fanin(n, [this, &children]( auto const& f, uint32_t i ) { children[i].n = ntk.get_node(f);
-                                                                          children[i].s = f;
-                                                                          children[i].cp = ntk.is_on_critical_path(children[i].n);});
-    return children;
-  }
-    
-  /* Try the associativity rule on node n. Return true if the network is updated. */
-  bool try_associativity( node n )
-  {
-    std::cout << " NODE : "<< n << std::endl; 
-
     auto children = ordered_children(n);
-    
-    bool one_pi = (ntk.is_pi(children[0].n)) ^ (ntk.is_pi(children[1].n));//nothing to do if both children are pi or both nodes
-    if(!one_pi){
-      std::cout << "##### NO UPDATE ***BOTH PI OR NODE " << std::endl;
-      return false;
-    } 
-    if(!ntk.is_pi(children[0].n) && ntk.is_complemented(children[0].s)){
-      return false;
-    }
-    if(!ntk.is_pi(children[1].n) && ntk.is_complemented(children[1].s)){
-      return false;
-    }
- 
-    Node_sig c_on_critical_path, c_not_on_critical_path;
-    if(children[0].cp == true){
-      c_on_critical_path = children[0];
-      c_not_on_critical_path = children[1];
-    }
-    else if(children[1].cp == true){
-      c_on_critical_path = children[1];
-      c_not_on_critical_path = children[0];
-    }
-    else {
-      return false;
-    }
-   auto grand_children = ordered_children(c_on_critical_path.n);
-   Node_sig gc_on_critical_path, gc_not_on_critical_path;
-    if(grand_children[0].cp == true){
-      gc_on_critical_path = grand_children[0];
-      gc_not_on_critical_path = grand_children[1];
-    }
-    else if(grand_children[1].cp == true){
-      gc_on_critical_path = grand_children[1];
-      gc_not_on_critical_path = grand_children[0];
-    }
+    node out_node;
+    signal out_sig;
+    bool po_node = false;
+    bool out_sig_complemented = false;
+    //if(ntk.depth() == ntk.level(n)){
+       //signal out_sig  = ntk.po_at(n);
+       ntk.foreach_po([this, &po_node, &n, &out_sig, &out_sig_complemented](signal const& ns){ out_sig = ns;
+       //std::cout<< " ^^^^^^^ HERE FOR PO"<< std::endl;
+       //std::cout<< " ^^^^^^^ HERE FOR PO  "<< ntk.get_node(out_sig) <<"  ==  "<< n<<  std::endl;
+       if(ntk.get_node(out_sig) == n ){
+         po_node = true;
+         if(ntk.is_complemented(out_sig) == true){
+         out_sig_complemented = true;
+         //std::cout<< " ^^^^^^^ HERE FOR PO TREU   "<< ntk.get_node(out_sig) <<"  ==  "<< n<<  std::endl;
+         return true;
+         }
+       }
+       });
+         
+    //}
+    //else { // cannot use this when node does not have any parent node, in other words,  when node is connected to primary output
+      if(po_node == false){
+        ntk.foreach_fanout(n, [this, &out_node](node const& nd){ out_node = nd;});
+        auto children_out_node = ordered_children(out_node);
+        for(int i = 0; i < children_out_node.size(); i++){
+          if(children_out_node[i].n == n && ntk.is_complemented(children_out_node[i].s)){
+            out_sig_complemented = true;
+            return true;
+          }
+        }
+      }  
+    //}
 
-    bool both_pi = (ntk.is_pi(grand_children[0].n)) & (ntk.is_pi(grand_children[1].n));// nothing to do if both children are pi
-    
-    if(both_pi){
-      std::cout << "##### NO UPDATE ******** BOTH PI " << std::endl;
-      return false;
-    }
-    if(!ntk.is_pi(grand_children[0].n) && ntk.is_complemented(grand_children[0].s)){
-      return false;
-    }
-    if(!ntk.is_pi(grand_children[1].n) && ntk.is_complemented(grand_children[1].s)){
-      return false;
-    }
-    signal short_ckt = gc_on_critical_path.s;
-
-    auto hanging = ntk.create_and(gc_not_on_critical_path.s, c_not_on_critical_path.s);
-    auto new_out = ntk.create_and(short_ckt, hanging);
-    ntk.substitute_node(c_on_critical_path.n, hanging);   
-    ntk.substitute_node(n, new_out);
-
-    return true;
+    // if(out_sig_complemented){
+    //   return true;
+    // }
+    return false;
   }
   std::tuple<Node_sig, bool> check_common_grand_child(std::array<Node_sig, 2> grand_children0, std::array<Node_sig, 2> grand_children1)
   {
@@ -165,6 +134,218 @@ private:
     }
     return std::make_tuple(grand_children0[0], false);
   }
+  std::array<Node_sig, 2> ordered_children( node const& n ) const
+  {
+    std::array<Node_sig, 2> children;
+    ntk.foreach_fanin(n, [this, &children]( auto const& f, uint32_t i ) { children[i].n = ntk.get_node(f);
+                                                                          children[i].s = f;
+                                                                          children[i].cp = ntk.is_on_critical_path(children[i].n);});
+    return children;
+  }
+    
+  /* Try the associativity rule on node n. Return true if the network is updated. */
+  bool try_associativity( node n )
+  {
+    std::cout << " ** Entering Assosciativity for Node : "<< n << std::endl; 
+    Node_sig c_on_critical_path, c_not_on_critical_path;
+    Node_sig gc_on_critical_path, gc_not_on_critical_path;
+    bool com_gc;
+    Node_sig hi;
+    auto children = ordered_children(n);
+    bool only_one_child_comp = (ntk.is_complemented(children[0].s)) ^ (ntk.is_complemented(children[1].s));
+    
+    // for and associativity
+    bool one_pi = (ntk.is_pi(children[0].n)) & (ntk.is_pi(children[1].n));//nothing to do if both children are pi or both nodes
+    if(one_pi){
+      std::cout << "          NO UPDATE: BOTH PI " << std::endl;
+      return false;
+    } 
+    if(!out_sig_comp(n) && ntk.is_on_critical_path(n)){
+      if((!ntk.is_pi(children[0].n) && ntk.is_complemented(children[0].s)) || (!ntk.is_pi(children[1].n) && ntk.is_complemented(children[1].s))){
+        std::cout << "          NO UPDATE: Child is NOT a PI AND is complemented " << std::endl;
+        return false;
+      }
+      
+      if(!ntk.is_pi(children[0].n) && children[0].cp == true){
+        c_on_critical_path = children[0];
+        c_not_on_critical_path = children[1];
+      }
+      else if(!ntk.is_pi(children[1].n) && children[1].cp == true){
+        c_on_critical_path = children[1];
+        c_not_on_critical_path = children[0];
+      }
+      else {
+        std::cout << "          NO UPDATE: No child on CP " << std::endl;
+        return false;
+      }
+  
+      auto grand_children = ordered_children(c_on_critical_path.n);
+      auto grand_children_not_cp = ordered_children(c_not_on_critical_path.n);
+
+      
+      if(grand_children[0].cp == true){
+        gc_on_critical_path = grand_children[0];
+        gc_not_on_critical_path = grand_children[1];
+      }
+      else if(grand_children[1].cp == true){
+        gc_on_critical_path = grand_children[1];
+        gc_not_on_critical_path = grand_children[0];
+      }
+      else {
+        std::cout << "          NO UPDATE: No grand-child on CP " << std::endl;
+        return false;
+      }
+  
+      if(!ntk.is_pi(grand_children[0].n) && ntk.is_complemented(grand_children[0].s)){
+        std::cout << "          NO UPDATE: GRAND-CHILD-1 NOT PI AND COMPLE " << std::endl;
+        return false;
+      }
+      if(!ntk.is_pi(grand_children[1].n) && ntk.is_complemented(grand_children[1].s)){
+        std::cout << "          NO UPDATE: GRAND-CHILD-2 NOT PI AND COMPLE " << std::endl;
+        return false;
+      }
+      std::tie(hi, com_gc) = check_common_grand_child(grand_children, grand_children_not_cp);
+      //std::cout << " GC: " << grand_children[0].n << " "<<grand_children[1].n<< " "<< grand_children_not_cp[0].n<< " " << grand_children_not_cp[1].n << " : "<< com_gc << std::endl;
+  
+      if((ntk.level(gc_on_critical_path.n) >= ntk.level(c_not_on_critical_path.n) + 1)){
+        auto hanging = ntk.create_and(gc_not_on_critical_path.s, c_not_on_critical_path.s);
+        auto new_out = ntk.create_and(gc_on_critical_path.s, hanging);
+        ntk.substitute_node(n, new_out);
+        std::cout << "- - - - - - UPDATE: AND Associativity " << "  COMMON GC "<< com_gc << std::endl;
+        return true;
+      }
+      else{
+        std::cout << "          NO UPDATE: Level difference less than or equal to 1 " << std::endl;
+        return false;
+      }
+    }
+  
+    else if(!out_sig_comp(n) && only_one_child_comp && ntk.is_on_critical_path(n)){
+      Node_sig only_compl_child = ntk.is_complemented(children[0].s) ? children[0] : children[1];
+      Node_sig other_child = !ntk.is_complemented(children[0].s) ? children[0] : children[1];
+      auto grand_children = ordered_children(only_compl_child.n);
+      auto grand_children_not_cp = ordered_children(other_child.n);
+      bool both_gc_compl = ntk.is_complemented(grand_children[0].s) & ntk.is_complemented(grand_children[1].s); 
+      if(both_gc_compl && ntk.is_on_critical_path(only_compl_child.n)){
+        c_not_on_critical_path = other_child;
+        
+        if(grand_children[0].cp == true){
+          gc_on_critical_path = grand_children[0];
+          gc_not_on_critical_path = grand_children[1];
+        }
+        else if(grand_children[1].cp == true){
+          gc_on_critical_path = grand_children[1];
+          gc_not_on_critical_path = grand_children[0];
+        }
+        else {
+          std::cout << "          NO UPDATE: No grand-child on CP " << std::endl;
+          return false;
+        }
+
+        std::tie(hi, com_gc) = check_common_grand_child(grand_children, grand_children_not_cp);
+
+        if((ntk.level(gc_on_critical_path.n) >= ntk.level(c_not_on_critical_path.n) + 1)){
+          auto hanging = ntk.create_and(gc_not_on_critical_path.s, c_not_on_critical_path.s);
+          auto new_out = ntk.create_and(gc_on_critical_path.s, hanging);
+          ntk.substitute_node(n, new_out);
+          std::cout << "- - - - - - UPDATE: OR Associativity " << "  COMMON GC "<< com_gc << std::endl;
+          return true;
+        }
+        else{
+          std::cout << "          NO UPDATE: Level difference less than or equal to 1 " << std::endl;
+          return false;
+        }  
+      }
+    
+    }
+  }
+  
+  
+  //   bool one_pi = (ntk.is_pi(children[0].n)) & (ntk.is_pi(children[1].n));//nothing to do if both children are pi or both nodes
+  //   if(one_pi){
+  //     std::cout << "          NO UPDATE: BOTH PI REMOVED:(OR NODE) " << std::endl;
+  //     return false;
+  //   } 
+  //   if(!out_sig_comp(n)){
+  //     if(!ntk.is_pi(children[0].n) && ntk.is_complemented(children[0].s)){
+  //       std::cout << "          NO UPDATE: CHILD-1 NOT PI AND COMPLE " << std::endl;
+  //       return false;
+  //     }
+  //     if(!ntk.is_pi(children[1].n) && ntk.is_complemented(children[1].s)){
+  //      std::cout << "          NO UPDATE: CHILD-2 NOT PI AND COMPLE " << std::endl;
+  //       return false;
+  //    }
+  //   }
+  //   //else {
+
+  //   //}
+    
+ 
+  //   Node_sig c_on_critical_path, c_not_on_critical_path;
+  //   if(!ntk.is_pi(children[0].n) && children[0].cp == true){
+  //     c_on_critical_path = children[0];
+  //     c_not_on_critical_path = children[1];
+  //   }
+  //   else if(!ntk.is_pi(children[1].n) && children[1].cp == true){
+  //     c_on_critical_path = children[1];
+  //     c_not_on_critical_path = children[0];
+  //   }
+  //   else {
+  //     std::cout << "          NO UPDATE: No child on CP " << std::endl;
+  //     return false;
+  //   }
+  //  auto grand_children = ordered_children(c_on_critical_path.n);
+  //  auto grand_children_not_cp = ordered_children(c_not_on_critical_path.n);
+  //  Node_sig gc_on_critical_path, gc_not_on_critical_path;
+  //   if(grand_children[0].cp == true){
+  //     gc_on_critical_path = grand_children[0];
+  //     gc_not_on_critical_path = grand_children[1];
+  //   }
+  //   else if(grand_children[1].cp == true){
+  //     gc_on_critical_path = grand_children[1];
+  //     gc_not_on_critical_path = grand_children[0];
+  //   }
+  //   else {
+  //     std::cout << "          NO UPDATE: No grand-child on CP " << std::endl;
+  //     return false;
+  //   }
+
+  //   bool both_pi = (ntk.is_pi(grand_children[0].n)) & (ntk.is_pi(grand_children[1].n));// nothing to do if both children are pi
+  //   bool com_gc;
+  //   Node_sig hi;
+  //   if(both_pi){
+  //     std::cout << "          NO UPDATE: BOTH grand-child PI " << std::endl;
+  //     return false;
+  //   }
+  //   if(!out_sig_comp(n)){
+  //     if(!ntk.is_pi(grand_children[0].n) && ntk.is_complemented(grand_children[0].s)){
+  //       std::cout << "          NO UPDATE: GRAND-CHILD-1 NOT PI AND COMPLE " << std::endl;
+  //       return false;
+  //     }
+  //     if(!ntk.is_pi(grand_children[1].n) && ntk.is_complemented(grand_children[1].s)){
+  //       std::cout << "          NO UPDATE: GRAND-CHILD-2 NOT PI AND COMPLE " << std::endl;
+  //       return false;
+  //     }
+  //   }
+  //   //signal short_ckt = gc_on_critical_path.s;
+  //   std::tie(hi, com_gc) = check_common_grand_child(grand_children, grand_children_not_cp);
+  //     std::cout << " GC: " << grand_children[0].n << " "<<grand_children[1].n<< " "<< grand_children_not_cp[0].n<< " " << grand_children_not_cp[1].n << " : "<< com_gc << std::endl;
+ 
+  //   if((ntk.level(gc_on_critical_path.n) >= ntk.level(c_not_on_critical_path.n) + 1) && com_gc == false){
+  //     auto hanging = ntk.create_and(gc_not_on_critical_path.s, c_not_on_critical_path.s);
+  //     auto new_out = ntk.create_and(gc_on_critical_path.s, hanging);
+  //     //ntk.substitute_node(c_on_critical_path.n, hanging);   
+  //     ntk.substitute_node(n, new_out);
+  //     std::cout << "- - - - - - UPDATE: Associativity " << "  COMMON GC "<< com_gc << std::endl;
+  //     return true;
+  //   }
+  //   else{
+  //     std::cout << "          NO UPDATE: Level difference less than or equal to 1 " << std::endl;
+  //     return false;
+  //   }
+    
+  // }
+  
   std::array<Node_sig, 2> get_other_two_nodes(std::array<Node_sig, 2> grand_children0, std::array<Node_sig, 2> grand_children1, node common_gc)
   {
     std::array<Node_sig, 2> non_common_gc;
@@ -186,56 +367,37 @@ private:
     return non_common_gc;
     
   }
-  bool out_sig_comp(node n)
-  {
-    auto children = ordered_children(n);
-    node out_node;
-    signal out_sig;
-    bool out_sig_complemented = false;
-    
-    if(ntk.depth() == ntk.level(n)){
-       ntk.foreach_po([this, &out_sig](signal const& ns){ out_sig = ns;});
-       if(ntk.is_complemented(out_sig) == true){
-         out_sig_complemented = true;
-       }  
-    }
-    else {
-      ntk.foreach_fanout(n, [this, &out_node](node const& nd){ out_node = nd;});
-      auto children_out_node = ordered_children(out_node);
-      //std::cout << " out node : "<< children_out_node[0].n << std::endl;
-      for(int i = 0; i < 1; i++){
-      if(children_out_node[i].n == n && ntk.is_complemented(children_out_node[i].s)){
-        //out_sig = children_out_node[i].s;
-        out_sig_complemented = true;
-        //std::cout << " out node :INNN "<< children_out_node[0].n << std::endl;
-      }
-     }  
-    }
-    //ntk.is_complemented(children[0].s) && ntk.is_complemented(children[1].s) && 
-    if(out_sig_complemented){
-      return true;
-    }
-    return false;
-  }
-  // auto child_sig0 = ntk.create_and(children[1].s, grand_children0[1].s);
-  //   auto grand_child_sig1 = ntk.create_and(children[1].s, great_grand_children0_0[1].s);
-  //   ntk.substitute_node(great_grand_children0_0[1].n, grand_child_sig1);
-  //   ntk.substitute_node(grand_children0[1].n, child_sig0);
-  //   ntk.substitute_node(n, children[0].s);
-  bool optimise_three_layer_distri(node &n, Node_sig &move_child, Node_sig &move_gc, Node_sig &move_ggc, Node_sig &main_child, Node_sig &main_gchild)
+
+
+  bool optimise_three_layer_distri(node &n, Node_sig &move_child, Node_sig &move_gc, Node_sig &move_ggc, Node_sig &main_child, Node_sig &main_gchild, Node_sig &main_ggc)
   {
     std::cout << " ======== OPTIMISE "<< move_child.n << " " << move_gc.n << std::endl;
     std::cout << " ======== OPTIMISE "<< move_child.n << " " << move_ggc.n << std::endl;
     std::cout << " ======== OPTIMISE IS GC COMP : "<< ntk.is_complemented(move_gc.s) << std::endl;
-    auto child_sig0 = ntk.create_and(move_child.s, !move_gc.s);
+    
     auto grand_child_sig1 = ntk.create_and(move_child.s, move_ggc.s);
+    auto child_sig1 = ntk.create_and(grand_child_sig1, main_ggc.s);
+
+    auto child_sig0 = ntk.create_and(move_child.s, !move_gc.s);
+    
+    auto new_out = ntk.create_and(!child_sig0, !child_sig1);
+    
+    //ntk.replace_in_node(main_gchild.n, move_ggc.n, grand_child_sig1);
+    
     std::cout << " ======== OPTIMISE  SUB" << move_ggc.n << std::endl;
     std::cout << " ======== OPTIMISE  SUB" << move_gc.n << std::endl;
-    ntk.replace_in_node(main_child.n, move_gc.n, child_sig0);
-    ntk.replace_in_node(main_gchild.n, move_ggc.n, grand_child_sig1);
+    //auto child_sig1 = ntk.create_and(move_child.s, grand_child_sig1);
+    
+    
+    
+    
+    
+    //ntk.replace_in_node(main_child.n, move_gc.n, child_sig0);
+    
     //ntk.substitute_node(move_ggc.n, grand_child_sig1);
     //ntk.substitute_node(move_gc.n, child_sig0);
-    ntk.substitute_node(n, main_child.s);
+    //ntk.substitute_node(n, main_child.s);
+    ntk.substitute_node(n, !new_out);
     return true;
   }
   
@@ -243,23 +405,22 @@ private:
   bool try_distributivity (node n)
  {
     /* TODO */
-    std::cout << " NODE DISTRI: "<< n << std::endl; 
+    std::cout << " ++ Entering Disttributivity for Node : "<< n << std::endl; 
     
     auto children = ordered_children(n);
     bool both_pi = (ntk.is_pi(children[0].n)) & (ntk.is_pi(children[1].n));// nothing to do if both children are pi
     if(both_pi){
-       std::cout << "##### NO UPDATE ******** BOTH PI " << std::endl;
+       std::cout << "          NO UPDATE: BOTH PI " << std::endl;
        return false;
     }
     
     // both are nodes
     bool common_gc_exist;
     Node_sig common_gc;
-    //std::cout << " ^-^-^-^-^-^-^-^-^-^-^ CHECKING AIG OR::  "<< out_sig_comp(n) << " "<< ntk.is_complemented(children[0].s)<< " "<<ntk.is_complemented(children[1].s) <<std::endl;
-    //is_aig_or(n) && 
+
     bool both_child_complemented = (ntk.is_complemented(children[0].s)) & (ntk.is_complemented(children[1].s));
     
-        bool atlest_one_child_complemented = (ntk.is_complemented(children[0].s)) | (ntk.is_complemented(children[1].s));
+    bool atlest_one_child_complemented = (ntk.is_complemented(children[0].s)) | (ntk.is_complemented(children[1].s));
     Node_sig move_ggc;
     Node_sig ggc_on_cp;
     Node_sig ggc_not_cp;
@@ -267,7 +428,7 @@ private:
     if((out_sig_comp(n) && both_child_complemented && ntk.is_on_critical_path(n)) || ( both_child_complemented && ntk.is_on_critical_path(n))){
       bool one_pi = (ntk.is_pi(children[0].n)) | (ntk.is_pi(children[1].n));// nothing to do if both children are pi
       if(one_pi){
-       //std::cout << "##### NO UPDATE ******** ALEAST ONE PI " << std::endl;
+       std::cout << "          NO UPDATE: AND ON TOP/ OR ON TOP, There is ATLEAST ONE PI " << std::endl;
        return false;
       }
       //std::cout << " HERE 1"<< std::endl;
@@ -283,16 +444,16 @@ private:
           
           auto non_common_gc = get_other_two_nodes(grand_children0, grand_children1, common_gc.n);
           
-          auto hanging = ntk.create_and(ntk.create_not(non_common_gc[0].s), !non_common_gc[1].s);
-          auto new_out = ntk.create_and(ntk.create_not(hanging), common_gc.s);
+          auto hanging = ntk.create_and(!non_common_gc[0].s, !non_common_gc[1].s);
+          auto new_out = ntk.create_and(!hanging, common_gc.s);
           //std::cout<< "new_out signal : "<< ntk.is_complemented(new_out)<<std::endl;
 
           ntk.substitute_node(n, !new_out);
-          //std::cout << "~~~~~~~~~ UPDATE ~~~ common gc " << std::endl;
+          std::cout << "- - - - - UPDATE: COMMON grand-child found " << std::endl;
           return true;
         }
         else{
-          //std::cout << "##### NO UPDATE ******** NO COMMON GC " << std::endl;
+          std::cout << "          NO UPDATE: No common grand-child " << std::endl;
           return false;
           
 
@@ -304,13 +465,11 @@ private:
     else if( !out_sig_comp(n) && atlest_one_child_complemented && ntk.is_on_critical_path(n)){
       auto grand_children0 = ordered_children(children[0].n);
       auto grand_children1 = ordered_children(children[1].n);
-      std::cout << "&&&& HERHER  1111" << std::endl;
       Node_sig dc;
       bool common_ggc;
       if(ntk.is_complemented(children[0].s) && ntk.is_on_critical_path(children[0].n)  && !ntk.is_pi(children[1].n)){
         Node_sig child_on_cp = children[0];
         Node_sig child_not_cp = children[1];
-        std::cout<< "  hihihihihihi "<< std::endl;
         bool both_gc0_signal_complemented = (ntk.is_complemented(grand_children0[0].s) & ntk.is_complemented(grand_children0[1].s));
         if(both_gc0_signal_complemented){
           auto great_grand_children0_0 = ordered_children(grand_children0[0].n);
@@ -332,16 +491,18 @@ private:
               ggc_on_cp = great_grand_children0_0[0];
               ggc_not_cp = great_grand_children0_0[1];
               move_ggc = ggc_not_cp;
-              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp);
+              std::cout << "- - - - - UPDATE: Three layer distributivity - 1 " << std::endl;
+              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);
             }
             else if (ntk.is_on_critical_path(great_grand_children0_0[1].n) && !ntk.is_pi(great_grand_children0_0[1].n)){
               ggc_on_cp = great_grand_children0_0[1];
               ggc_not_cp = great_grand_children0_0[0];
               move_ggc = ggc_not_cp;
-              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp);
+              std::cout << "- - - - - UPDATE: Three layer distributivity - 2" << std::endl;
+              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);
             }
             else {
-              std::cout<< "  hihihihihihi 1"<< std::endl;
+              std::cout << "          NO UPDATE: Three layer distributivity - 3" << std::endl;
               return false;
             }
             
@@ -359,26 +520,30 @@ private:
               ggc_on_cp = great_grand_children0_1[0];
               ggc_not_cp = great_grand_children0_1[1];
               move_ggc = ggc_not_cp;
-              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp);
+              std::cout << "- - - - - UPDATE: Three layer distributivity - 4" << std::endl;
+              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);
             }
             else if (ntk.is_on_critical_path(great_grand_children0_1[1].n) && !ntk.is_pi(great_grand_children0_1[1].n)){
               ggc_on_cp = great_grand_children0_1[1];
               ggc_not_cp = great_grand_children0_1[0];
               move_ggc = ggc_not_cp;
-              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp);
+              std::cout << "- - - - - UPDATE: Three layer distributivity - 5" << std::endl;
+              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);
             }
             else {
-              std::cout<< "  hihihihihihi 2"<< std::endl;
+              std::cout << "          NO UPDATE: Three layer distributivity - 6" << std::endl;
               return false;
             }
             
             
           }
           else {
+            std::cout << "          NO UPDATE: Three layer distributivity - 7" << std::endl;
             return false;
           }
         }
         else {
+          std::cout << "          NO UPDATE: Three layer distributivity - 8" << std::endl;
           return false;
         }
       }
@@ -386,11 +551,10 @@ private:
         bool both_gc1_signal_complemented = (ntk.is_complemented(grand_children1[0].s) & ntk.is_complemented(grand_children1[1].s));
         Node_sig child_on_cp = children[1];
         Node_sig child_not_cp = children[0];
-        std::cout<< "  hihihihihihi else if 1"<< std::endl;
+        
         if(both_gc1_signal_complemented){
           auto great_grand_children1_0 = ordered_children(grand_children1[0].n);
           //bool not_both_ggc0_signal_complemented = ~(ntk.is_complemented(great_grand_children1_0[0].s) & ntk.is_complemented(great_grand_children1_0[1].s));  
-          std::cout<< "  hihihihihihi else if 2"<< std::endl;
           auto great_grand_children1_1 = ordered_children(grand_children1[1].n);
           //std::tie(dc, common_ggc) = check_common_grand_child(great_grand_children1_0, great_grand_children1_1);
           //bool not_both_ggc1_signal_complemented = ~(ntk.is_complemented(great_grand_children1_1[0].s) & ntk.is_complemented(great_grand_children1_1[1].s));
@@ -400,24 +564,23 @@ private:
 
             Node_sig move_child = child_not_cp;
             Node_sig move_gc = gc_not_cp;
-            std::cout<< "  hihihihihihi else if 3"<< std::endl;
             Node_sig main_child = child_on_cp;
             if(ntk.is_on_critical_path(great_grand_children1_0[0].n) && !ntk.is_pi(great_grand_children1_0[0].n)){
               ggc_on_cp = great_grand_children1_0[0];
               ggc_not_cp = great_grand_children1_0[1];
               move_ggc = ggc_not_cp;
-              std::cout<< "hihihihihihi else if 4" << std::endl;
-              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp);    
+              std::cout << "- - - - - UPDATE: Three layer distributivity - 9" << std::endl;
+              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);    
             }
             else if (ntk.is_on_critical_path(great_grand_children1_0[1].n)  && !ntk.is_pi(great_grand_children1_0[1].n)){
               ggc_on_cp = great_grand_children1_0[1];
               ggc_not_cp = great_grand_children1_0[0];
               move_ggc = ggc_not_cp;
-              std::cout<< "  hihihihihihi else if 5"<< std::endl;
-              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp);    
+              std::cout << "- - - - - UPDATE: Three layer distributivity - 10" << std::endl;
+              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);    
             }
             else {
-              std::cout<< "  hihihihihihi else if 6"<< std::endl;
+              std::cout << "          NO UPDATE: Three layer distributivity - 11" << std::endl;
               return false;
             }
             
@@ -436,30 +599,36 @@ private:
               ggc_on_cp = great_grand_children1_1[0];
               ggc_not_cp = great_grand_children1_1[1];
               move_ggc = ggc_not_cp;
-              std::cout<< "  hihihihihihi 41"<< std::endl;
-              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp);  
+              std::cout << "- - - - - UPDATE: Three layer distributivity - 12" << std::endl;
+              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);  
             }
             else if (ntk.is_on_critical_path(great_grand_children1_1[1].n)  && !ntk.is_pi(great_grand_children1_1[1].n)){
               ggc_on_cp = great_grand_children1_1[1];
               ggc_not_cp = great_grand_children1_1[0];
               move_ggc = ggc_not_cp;
-              std::cout<< "  hihihihihihi 42"<< std::endl;
-              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp);  
+              std::cout << "- - - - - UPDATE: Three layer distributivity - 13" << std::endl;
+              return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);  
             }
             else {
-              std::cout<< "  hihihihihihi 43"<< std::endl;
+              std::cout << "          NO UPDATE: Three layer distributivity - 14" << std::endl;
               return false;
             }
           }
           else {
+            std::cout << "          NO UPDATE: Three layer distributivity - 15" << std::endl;
             return false;
           }
         
         }
         else {
+          std::cout << "          NO UPDATE: Three layer distributivity - 16" << std::endl;
           return false;
         }
       }
+    }
+    else {
+      std::cout << "          NO UPDATE: For distributivity " << std::endl;
+      return false;
     }
   }
 
