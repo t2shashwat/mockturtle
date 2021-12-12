@@ -11,7 +11,7 @@
 #include <lorina/aiger.hpp>
 #include <mockturtle/algorithms/functional_reduction.hpp>
 using namespace mockturtle;
-#if 0
+
 TEST_CASE( "Simple associativity (AND)", "[aig_algebraic_rewriting]" )
 {
   /* create the network */
@@ -175,7 +175,7 @@ TEST_CASE( "Three-layer distributivity", "[aig_algebraic_rewriting]" )
   CHECK( tts == simulate<kitty::static_truth_table<num_pis>>( aig ) );
 }
 
-#endif
+
 #if 0
 TEST_CASE( "Depth optimization on ISCAS benchmarks", "[aig_algebraic_rewriting]" )
 {
@@ -209,13 +209,13 @@ TEST_CASE( "Depth optimization on ISCAS benchmarks", "[aig_algebraic_rewriting]"
   }
 }
 #endif
-//#if 0
+
 TEST_CASE( "Depth optimization on ISCAS benchmarks", "[aig_algebraic_rewriting]" )
 {
   uint32_t benchmark_ids[11] = {17, 432, 499, 880, 1355, 1908, 2670, 3540, 5315, 6288, 7552};
   uint32_t expected_depths[11] = {3, 26 , 19, 19, 25, 26, 18, 35, 34, 120, 25};
 
-  for ( uint32_t i = 1u; i <2; ++i )
+  for ( uint32_t i = 10u; i <11; ++i )
   {
     aig_network ntk, ntk_ori;
     auto const result = lorina::read_aiger( fmt::format( "{}/c{}.aig", BENCHMARKS_PATH, benchmark_ids[i] ), aiger_reader( ntk ) );
@@ -245,4 +245,4 @@ TEST_CASE( "Depth optimization on ISCAS benchmarks", "[aig_algebraic_rewriting]"
     CHECK( cec == true );
   }
 }
-//#endif
+
