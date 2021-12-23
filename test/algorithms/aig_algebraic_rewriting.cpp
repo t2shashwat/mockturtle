@@ -40,7 +40,7 @@ TEST_CASE( "Simple associativity (AND)", "[aig_algebraic_rewriting]" )
 
   /* check the resulting depth */
   depth_view depth_aig{aig};
-  std::cout << "NEW DEPTH : " << depth_aig.depth() << std::endl; 
+  //std::cout << "NEW DEPTH : " << depth_aig.depth() << std::endl; 
   
   CHECK( depth_aig.depth() == 2 );
 
@@ -70,7 +70,7 @@ TEST_CASE( "Simple associativity (OR)", "[aig_algebraic_rewriting]" )
 
   /* check the resulting depth */
   depth_view depth_aig{aig};
-  std::cout << "NEW DEPTH :   " << depth_aig.depth() << std::endl; 
+  //std::cout << "NEW DEPTH :   " << depth_aig.depth() << std::endl; 
   CHECK( depth_aig.depth() == 2 );
 
   /* check that the output functions remain the same */
@@ -108,7 +108,7 @@ TEST_CASE( "Simple distributivity (OR on top)", "[aig_algebraic_rewriting]" )
 
   /* check the resulting depth */
   depth_view depth_aig{aig};
-  std::cout << "NEW DEPTH :   " << depth_aig.depth() << std::endl; 
+  //std::cout << "NEW DEPTH :   " << depth_aig.depth() << std::endl; 
   CHECK( depth_aig.depth() == 3 );
 
   /* check that the output functions remain the same */
@@ -169,7 +169,7 @@ TEST_CASE( "Three-layer distributivity", "[aig_algebraic_rewriting]" )
 
   /* check the resulting depth */
   depth_view depth_aig{aig};
-  std::cout << "NEW DEPTH :   " << depth_aig.depth() << std::endl; 
+  //std::cout << "NEW DEPTH :   " << depth_aig.depth() << std::endl; 
   CHECK( depth_aig.depth() == 4 );
 
   /* check that the output functions remain the same */
