@@ -172,14 +172,18 @@ private:
       return false;
     } 
     if(ntk.is_on_critical_path(n)){
-      if(!ntk.is_pi(children[0].n) && children[0].cp == true){
+      if(!ntk.is_pi(children[0].n) && children[0].cp == true && children[1].cp == false){
         c_on_critical_path = children[0];
         c_not_on_critical_path = children[1];
       }
-      else if(!ntk.is_pi(children[1].n) && children[1].cp == true){
+      else if(!ntk.is_pi(children[1].n) && children[1].cp == true && children[0].cp == false){
         c_on_critical_path = children[1];
         c_not_on_critical_path = children[0];
       }
+      else if(!ntk.is_pi(children[0].n) && !ntk.is_pi(children[1].n) && children[0].cp == true && children[1].cp == true){
+        return false;
+      }
+      
       else {
         //std::cout << "          NO UPDATE: No child on CP " << std::endl;
         return false;
@@ -189,22 +193,26 @@ private:
         auto grand_children = ordered_children(c_on_critical_path.n);
         auto grand_children_not_cp = ordered_children(c_not_on_critical_path.n);
         
-        if(grand_children[0].cp == true){
+        if(grand_children[0].cp == true && grand_children[1].cp == false){
           gc_on_critical_path = grand_children[0];
           gc_not_on_critical_path = grand_children[1];
         }
-        else if(grand_children[1].cp == true){
+        else if(grand_children[1].cp == true && grand_children[0].cp == false){
           gc_on_critical_path = grand_children[1];
           gc_not_on_critical_path = grand_children[0];
         }
+        else if(grand_children[0].cp == true && grand_children[1].cp == true){
+          return false;
+        }
+      
         else {
           //std::cout << "          NO UPDATE: No grand-child on CP " << std::endl;
           return false;
         }
 
-        std::tie(std::ignore, com_gc, std::ignore) = check_common_grand_child(grand_children, grand_children_not_cp);
-        std::tie(std::ignore, std::ignore, xor_op) = check_common_great_grand_child(ordered_children(grand_children[0].n), ordered_children(grand_children[1].n));
-        if((ntk.level(gc_on_critical_path.n) >= ntk.level(c_not_on_critical_path.n) + 1) && !xor_op){
+        //std::tie(std::ignore, com_gc, std::ignore) = check_common_grand_child(grand_children, grand_children_not_cp);
+        //std::tie(std::ignore, std::ignore, xor_op) = check_common_great_grand_child(ordered_children(grand_children[0].n), ordered_children(grand_children[1].n));
+        if((ntk.level(gc_on_critical_path.n) >= ntk.level(c_not_on_critical_path.n) + 1) ){//&& !xor_op
           auto hanging = ntk.create_and(gc_not_on_critical_path.s, c_not_on_critical_path.s);
           auto new_out = ntk.create_and(gc_on_critical_path.s, hanging);
           ntk.substitute_node(n, new_out);
@@ -220,104 +228,7 @@ private:
         return false;
 
     }
-    /*if(!out_sig_comp(n) && ntk.is_on_critical_path(n)){
-      if((!ntk.is_pi(children[0].n) && ntk.is_complemented(children[0].s)) || (!ntk.is_pi(children[1].n) && ntk.is_complemented(children[1].s))){
-        //std::cout << "          NO UPDATE: Child is NOT a PI AND is complemented " << std::endl;
-        return false;
-      }
-      
-      if(!ntk.is_pi(children[0].n) && children[0].cp == true){
-        c_on_critical_path = children[0];
-        c_not_on_critical_path = children[1];
-      }
-      else if(!ntk.is_pi(children[1].n) && children[1].cp == true){
-        c_on_critical_path = children[1];
-        c_not_on_critical_path = children[0];
-      }
-      else {
-        //std::cout << "          NO UPDATE: No child on CP " << std::endl;
-        return false;
-      }
-  
-      auto grand_children = ordered_children(c_on_critical_path.n);
-      auto grand_children_not_cp = ordered_children(c_not_on_critical_path.n);
-
-      
-      if(grand_children[0].cp == true){
-        gc_on_critical_path = grand_children[0];
-        gc_not_on_critical_path = grand_children[1];
-      }
-      else if(grand_children[1].cp == true){
-        gc_on_critical_path = grand_children[1];
-        gc_not_on_critical_path = grand_children[0];
-      }
-      else {
-        //std::cout << "          NO UPDATE: No grand-child on CP " << std::endl;
-        return false;
-      }
-  
-      //if(!ntk.is_pi(grand_children[0].n) && ntk.is_complemented(grand_children[0].s)){
-        //std::cout << "          NO UPDATE: GRAND-CHILD-1 NOT PI AND COMPLE " << std::endl;
-        //return false;
-      //}
-      //if(!ntk.is_pi(grand_children[1].n) && ntk.is_complemented(grand_children[1].s)){
-        //std::cout << "          NO UPDATE: GRAND-CHILD-2 NOT PI AND COMPLE " << std::endl;
-        //return false;
-      //}
-      std::tie(hi, com_gc) = check_common_grand_child(grand_children, grand_children_not_cp);
-      //std::cout << " GC: " << grand_children[0].n << " "<<grand_children[1].n<< " "<< grand_children_not_cp[0].n<< " " << grand_children_not_cp[1].n << " : "<< com_gc << std::endl;
-  
-      if((ntk.level(gc_on_critical_path.n) >= ntk.level(c_not_on_critical_path.n) + 1)){
-        auto hanging = ntk.create_and(gc_not_on_critical_path.s, c_not_on_critical_path.s);
-        auto new_out = ntk.create_and(gc_on_critical_path.s, hanging);
-        ntk.substitute_node(n, new_out);
-        std::cout << "- - - - - - UPDATE: AND Associativity " << "  COMMON GC "<< com_gc << std::endl;
-        return true;
-      }
-      else{
-        //std::cout << "          NO UPDATE: Level difference less than or equal to 1 " << std::endl;
-        return false;
-      }
-    }
-  
-    else if(out_sig_comp(n) && only_one_child_comp && ntk.is_on_critical_path(n)){
-      Node_sig only_compl_child = ntk.is_complemented(children[0].s) ? children[0] : children[1];
-      Node_sig other_child = !ntk.is_complemented(children[0].s) ? children[0] : children[1];
-      auto grand_children = ordered_children(only_compl_child.n);
-      auto grand_children_not_cp = ordered_children(other_child.n);
-      bool both_gc_compl = ntk.is_complemented(grand_children[0].s) & ntk.is_complemented(grand_children[1].s); 
-      if(both_gc_compl && ntk.is_on_critical_path(only_compl_child.n)){
-        c_not_on_critical_path = other_child;
-        
-        if(grand_children[0].cp == true){
-          gc_on_critical_path = grand_children[0];
-          gc_not_on_critical_path = grand_children[1];
-        }
-        else if(grand_children[1].cp == true){
-          gc_on_critical_path = grand_children[1];
-          gc_not_on_critical_path = grand_children[0];
-        }
-        else {
-          //std::cout << "          NO UPDATE: No grand-child on CP " << std::endl;
-          return false;
-        }
-
-        std::tie(hi, com_gc) = check_common_grand_child(grand_children, grand_children_not_cp);
-
-        if((ntk.level(gc_on_critical_path.n) >= ntk.level(c_not_on_critical_path.n) + 1)){
-          auto hanging = ntk.create_and(gc_not_on_critical_path.s, c_not_on_critical_path.s);
-          auto new_out = ntk.create_and(gc_on_critical_path.s, hanging);
-          ntk.substitute_node(n, new_out);
-          std::cout << "- - - - - - UPDATE: OR Associativity " << "  COMMON GC "<< com_gc << std::endl;
-          return true;
-        }
-        else{
-          //std::cout << "          NO UPDATE: Level difference less than or equal to 1 " << std::endl;
-          return false;
-        }  
-      }
     
-    }*/
   }
   
   
@@ -388,7 +299,7 @@ private:
     Node_sig ggc_on_cp;
     Node_sig ggc_not_cp;
 
-    if((out_sig_comp(n) && both_child_complemented && ntk.is_on_critical_path(n)) || ( both_child_complemented && ntk.is_on_critical_path(n))){
+    if((out_sig_comp(n) && both_child_complemented && ntk.is_on_critical_path(n)) || (!out_sig_comp(n) && both_child_complemented && ntk.is_on_critical_path(n) )){
       bool one_pi = (ntk.is_pi(children[0].n)) | (ntk.is_pi(children[1].n));// nothing to do if both children are pi
       if(one_pi){
        //std::cout << "          NO UPDATE: AND ON TOP/ OR ON TOP, There is ATLEAST ONE PI " << std::endl;
@@ -400,7 +311,7 @@ private:
         auto grand_children1 = ordered_children(children[1].n);
         bool all_gc_signal_same = (ntk.is_complemented(grand_children0[0].s) ^ ntk.is_complemented(grand_children0[1].s))
                                     ^ (ntk.is_complemented(grand_children1[0].s) ^ ntk.is_complemented(grand_children1[1].s));
-        if(!all_gc_signal_same){
+        //if(!all_gc_signal_same){
         // check if a common grand-child exists
         std::tie(common_gc, common_gc_exist, std::ignore) = check_common_grand_child(grand_children0, grand_children1);
         if(common_gc_exist == true && ntk.is_on_critical_path(common_gc.n)){
@@ -422,14 +333,18 @@ private:
 
         }
       }
-    }
+    //}
     // three layer distributivity
-
-    else if( !out_sig_comp(n) && atlest_one_child_complemented && ntk.is_on_critical_path(n)){
+// && atlest_one_child_complemented 
+    else if( !out_sig_comp(n)&& ntk.is_on_critical_path(n)){
       auto grand_children0 = ordered_children(children[0].n);
       auto grand_children1 = ordered_children(children[1].n);
       Node_sig dc;
       bool common_ggc;
+      if(ntk.is_on_critical_path(children[0].n) && ntk.is_on_critical_path(children[1].n)){
+        return false;
+      }
+
       if(ntk.is_complemented(children[0].s) && ntk.is_on_critical_path(children[0].n)  && !ntk.is_pi(children[1].n)){
         Node_sig child_on_cp = children[0];
         Node_sig child_not_cp = children[1];
@@ -439,6 +354,9 @@ private:
           //bool both_ggc0_signal_complemented = ntk.is_complemented(great_grand_children0_0[0].s) & ntk.is_complemented(great_grand_children0_0[1].s);  
         
           auto great_grand_children0_1 = ordered_children(grand_children0[1].n);
+          if(ntk.is_on_critical_path(grand_children0[0].n) && ntk.is_on_critical_path(grand_children0[1].n)){
+            return false;
+          }
           //std::tie(dc, common_ggc) = check_common_grand_child(great_grand_children0_0, great_grand_children0_1);
           //bool both_ggc1_signal_complemented = ntk.is_complemented(great_grand_children0_1[0].s) & ntk.is_complemented(great_grand_children0_1[1].s);
           if(ntk.is_on_critical_path(grand_children0[0].n) && !ntk.is_pi(grand_children0[0].n)) {
@@ -449,15 +367,15 @@ private:
             Node_sig move_gc = gc_not_cp;
             
             Node_sig main_child = child_on_cp;
-            
-            if(ntk.is_on_critical_path(great_grand_children0_0[0].n)  && !ntk.is_pi(great_grand_children0_0[0].n)){
+            //  && !ntk.is_pi(great_grand_children0_0[0].n)
+            if(ntk.is_on_critical_path(great_grand_children0_0[0].n) && !ntk.is_on_critical_path(great_grand_children0_0[1].n)){
               ggc_on_cp = great_grand_children0_0[0];
               ggc_not_cp = great_grand_children0_0[1];
               move_ggc = ggc_not_cp;
               std::cout << "- - - - - UPDATE: Three layer distributivity - 1 " << std::endl;
               return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);
-            }
-            else if (ntk.is_on_critical_path(great_grand_children0_0[1].n) && !ntk.is_pi(great_grand_children0_0[1].n)){
+            }// && !ntk.is_pi(great_grand_children0_0[1].n)
+            else if (ntk.is_on_critical_path(great_grand_children0_0[1].n) && !ntk.is_on_critical_path(great_grand_children0_0[0].n)){
               ggc_on_cp = great_grand_children0_0[1];
               ggc_not_cp = great_grand_children0_0[0];
               move_ggc = ggc_not_cp;
@@ -478,15 +396,15 @@ private:
             Node_sig move_child = child_not_cp;
             Node_sig move_gc = gc_not_cp;
             
-            Node_sig main_child = child_on_cp;
-            if(ntk.is_on_critical_path(great_grand_children0_1[0].n) && !ntk.is_pi(great_grand_children0_1[0].n)){
+            Node_sig main_child = child_on_cp;// && !ntk.is_pi(great_grand_children0_1[0].n)
+            if(ntk.is_on_critical_path(great_grand_children0_1[0].n) && !ntk.is_on_critical_path(great_grand_children0_1[1].n)){
               ggc_on_cp = great_grand_children0_1[0];
               ggc_not_cp = great_grand_children0_1[1];
               move_ggc = ggc_not_cp;
               std::cout << "- - - - - UPDATE: Three layer distributivity - 4" << std::endl;
               return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);
-            }
-            else if (ntk.is_on_critical_path(great_grand_children0_1[1].n) && !ntk.is_pi(great_grand_children0_1[1].n)){
+            }// && !ntk.is_pi(great_grand_children0_1[1].n)
+            else if (ntk.is_on_critical_path(great_grand_children0_1[1].n) && !ntk.is_on_critical_path(great_grand_children0_1[0].n)){
               ggc_on_cp = great_grand_children0_1[1];
               ggc_not_cp = great_grand_children0_1[0];
               move_ggc = ggc_not_cp;
@@ -521,21 +439,24 @@ private:
           auto great_grand_children1_1 = ordered_children(grand_children1[1].n);
           //std::tie(dc, common_ggc) = check_common_grand_child(great_grand_children1_0, great_grand_children1_1);
           bool both_ggc1_signal_complemented = ntk.is_complemented(great_grand_children1_1[0].s) & ntk.is_complemented(great_grand_children1_1[1].s);
+          if(ntk.is_on_critical_path(grand_children1[0].n) && ntk.is_on_critical_path(grand_children1[1].n)){
+            return false;
+          }
           if(ntk.is_on_critical_path(grand_children1[0].n) && !ntk.is_pi(grand_children1[0].n)) {
             Node_sig gc_on_cp = grand_children1[0];
             Node_sig gc_not_cp = grand_children1[1];
 
             Node_sig move_child = child_not_cp;
             Node_sig move_gc = gc_not_cp;
-            Node_sig main_child = child_on_cp;
-            if(ntk.is_on_critical_path(great_grand_children1_0[0].n) && !ntk.is_pi(great_grand_children1_0[0].n)){
+            Node_sig main_child = child_on_cp;// && !ntk.is_pi(great_grand_children1_0[0].n)
+            if(ntk.is_on_critical_path(great_grand_children1_0[0].n) && !ntk.is_on_critical_path(great_grand_children1_0[1].n)){
               ggc_on_cp = great_grand_children1_0[0];
               ggc_not_cp = great_grand_children1_0[1];
               move_ggc = ggc_not_cp;
               std::cout << "- - - - - UPDATE: Three layer distributivity - 9" << std::endl;
               return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);    
-            }
-            else if (ntk.is_on_critical_path(great_grand_children1_0[1].n)  && !ntk.is_pi(great_grand_children1_0[1].n)){
+            }//  && !ntk.is_pi(great_grand_children1_0[1].n)
+            else if (ntk.is_on_critical_path(great_grand_children1_0[1].n) && !ntk.is_on_critical_path(great_grand_children1_0[0].n)){
               ggc_on_cp = great_grand_children1_0[1];
               ggc_not_cp = great_grand_children1_0[0];
               move_ggc = ggc_not_cp;
@@ -557,15 +478,15 @@ private:
             Node_sig move_gc = gc_not_cp;
             
             Node_sig main_child = child_on_cp;
-            
-            if(ntk.is_on_critical_path(great_grand_children1_1[0].n) && !ntk.is_pi(great_grand_children1_1[0].n)){
+            // && !ntk.is_pi(great_grand_children1_1[0].n)
+            if(ntk.is_on_critical_path(great_grand_children1_1[0].n) && !ntk.is_on_critical_path(great_grand_children1_1[1].n)){
               ggc_on_cp = great_grand_children1_1[0];
               ggc_not_cp = great_grand_children1_1[1];
               move_ggc = ggc_not_cp;
               std::cout << "- - - - - UPDATE: Three layer distributivity - 12" << std::endl;
               return optimise_three_layer_distri(n, move_child, move_gc, move_ggc, main_child, gc_on_cp, ggc_on_cp);  
-            }
-            else if (ntk.is_on_critical_path(great_grand_children1_1[1].n)  && !ntk.is_pi(great_grand_children1_1[1].n)){
+            }// && !ntk.is_pi(great_grand_children1_1[1].n)
+            else if (ntk.is_on_critical_path(great_grand_children1_1[1].n) && !ntk.is_on_critical_path(great_grand_children1_1[0].n) ){
               ggc_on_cp = great_grand_children1_1[1];
               ggc_not_cp = great_grand_children1_1[0];
               move_ggc = ggc_not_cp;

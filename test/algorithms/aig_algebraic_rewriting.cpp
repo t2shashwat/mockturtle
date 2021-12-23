@@ -215,7 +215,7 @@ TEST_CASE( "Depth optimization on ISCAS benchmarks", "[aig_algebraic_rewriting]"
   uint32_t benchmark_ids[11] = {17, 432, 499, 880, 1355, 1908, 2670, 3540, 5315, 6288, 7552};
   uint32_t expected_depths[11] = {3, 26 , 19, 19, 25, 26, 18, 35, 34, 120, 25};
 
-  for ( uint32_t i = 10u; i <11; ++i )
+  for ( uint32_t i = 0u; i <11; ++i )
   {
     aig_network ntk, ntk_ori;
     auto const result = lorina::read_aiger( fmt::format( "{}/c{}.aig", BENCHMARKS_PATH, benchmark_ids[i] ), aiger_reader( ntk ) );
@@ -224,6 +224,7 @@ TEST_CASE( "Depth optimization on ISCAS benchmarks", "[aig_algebraic_rewriting]"
       continue;
     }
     ntk_ori = cleanup_dangling( ntk );
+
 
     /* call the algorithm */
     aig_algebraic_rewriting( ntk );
@@ -245,4 +246,3 @@ TEST_CASE( "Depth optimization on ISCAS benchmarks", "[aig_algebraic_rewriting]"
     CHECK( cec == true );
   }
 }
-
